@@ -100,7 +100,7 @@ export default function MusicPlayer() {
         const { status } = await MediaLibrary.requestPermissionsAsync();
         if (status === 'granted') {
           setHasPermission(true);
-          await loadInitialData();
+          await loadInitialDataUpdated();
         }
       }
     } catch (error) {
