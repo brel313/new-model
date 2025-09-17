@@ -19,10 +19,8 @@ import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Slider from 'react-native-slider';
-import { MaterialIcons, Ionicons } from '@expo/vector-icons';
+import { MaterialIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
-import FolderBrowser from '/app/frontend/components/FolderBrowser';
-import PlaylistManager from '/app/frontend/components/PlaylistManager';
 
 // Colores del tema naranja oscuro
 const COLORS = {
@@ -52,6 +50,394 @@ interface PlaylistData {
 
 const { width, height } = Dimensions.get('window');
 
+// Componente FolderBrowser integrado
+function FolderBrowser({ onFolderSelect, onClose, selectedFolders }: {
+  onFolderSelect: (folderPath: string) => void;
+  onClose: () => void;
+  selectedFolders: string[];
+}) {
+  const [currentPath, setCurrentPath] = useState(FileSystem.documentDirectory || '');
+  const [items, setItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    loadDirectory(currentPath);
+  }, [currentPath]);
+
+  const loadDirectory = async (path: string) => {
+    setLoading(true);
+    try {
+      const info = await FileSystem.getInfoAsync(path);
+      if (!info.exists) {
+        Alert.alert('Error', 'La carpeta no existe');
+        return;
+      }
+
+      const items = await FileSystem.readDirectoryAsync(path);
+      const folderItems: any[] = [];
+
+      for (const item of items) {
+        const itemPath = `${path}/${item}`;
+        const itemInfo = await FileSystem.getInfoAsync(itemPath);
+        
+        folderItems.push({
+          name: item,
+          uri: itemPath,
+          isDirectory: itemInfo.isDirectory,
+          size: itemInfo.size,
+        });
+      }
+
+      folderItems.sort((a, b) => {
+        if (a.isDirectory && !b.isDirectory) return -1;
+        if (!a.isDirectory && b.isDirectory) return 1;
+        return a.name.localeCompare(b.name);
+      });
+
+      setItems(folderItems);
+    } catch (error) {
+      console.error('Error loading directory:', error);
+      Alert.alert('Error', 'No se pudo cargar la carpeta');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const navigateToParent = () => {
+    const parentPath = currentPath.split('/').slice(0, -1).join('/');
+    if (parentPath) {
+      setCurrentPath(parentPath);
+    }
+  };
+
+  const handleItemPress = (item: any) => {
+    if (item.isDirectory) {
+      setCurrentPath(item.uri);
+    }
+  };
+
+  const handleSelectFolder = (folderPath: string) => {
+    onFolderSelect(folderPath);
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return '0 B';
+    const k = 1024;
+    const sizes = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+  };
+
+  const renderItem = ({ item }: { item: any }) => {
+    const isSelected = selectedFolders.includes(item.uri);
+    
+    return (
+      <TouchableOpacity
+        style={[styles.folderItem, isSelected && styles.selectedFolderItem]}
+        onPress={() => handleItemPress(item)}
+        onLongPress={() => item.isDirectory && handleSelectFolder(item.uri)}
+      >
+        <MaterialIcons
+          name={item.isDirectory ? 'folder' : 'audio-file'}
+          size={24}
+          color={item.isDirectory ? COLORS.primary : COLORS.textSecondary}
+        />
+        <View style={styles.folderItemInfo}>
+          <Text style={styles.folderItemName} numberOfLines={1}>
+            {item.name}
+          </Text>
+          {!item.isDirectory && item.size && (
+            <Text style={styles.folderItemSize}>
+              {formatFileSize(item.size)}
+            </Text>
+          )}
+        </View>
+        {item.isDirectory && (
+          <TouchableOpacity
+            style={styles.folderSelectButton}
+            onPress={() => handleSelectFolder(item.uri)}
+          >
+            <MaterialIcons
+              name={isSelected ? 'check-circle' : 'add-circle-outline'}
+              size={20}
+              color={isSelected ? COLORS.primary : COLORS.textSecondary}
+            />
+          </TouchableOpacity>
+        )}
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.folderBrowserContainer}>
+      <View style={styles.folderHeader}>
+        <TouchableOpacity onPress={onClose}>
+          <MaterialIcons name="close" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <Text style={styles.folderTitle}>Explorador de Carpetas</Text>
+        <TouchableOpacity onPress={navigateToParent}>
+          <MaterialIcons name="arrow-upward" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.pathContainer}>
+        <Text style={styles.currentPath} numberOfLines={1}>
+          {currentPath}
+        </Text>
+      </View>
+
+      <View style={styles.selectedInfo}>
+        <Text style={styles.selectedText}>
+          Carpetas seleccionadas: {selectedFolders.length}
+        </Text>
+      </View>
+
+      <FlatList
+        data={items}
+        renderItem={renderItem}
+        keyExtractor={item => item.uri}
+        style={styles.folderList}
+        contentContainerStyle={styles.folderListContent}
+      />
+    </SafeAreaView>
+  );
+}
+
+// Componente PlaylistManager integrado
+function PlaylistManager({
+  playlists,
+  currentPlaylist,
+  onCreatePlaylist,
+  onLoadPlaylist,
+  onDeletePlaylist,
+  onClose,
+  audioFiles
+}: {
+  playlists: PlaylistData[];
+  currentPlaylist: AudioFile[];
+  onCreatePlaylist: (name: string, songs: AudioFile[]) => void;
+  onLoadPlaylist: (playlist: PlaylistData) => void;
+  onDeletePlaylist: (playlist: PlaylistData) => void;
+  onClose: () => void;
+  audioFiles: AudioFile[];
+}) {
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newPlaylistName, setNewPlaylistName] = useState('');
+  const [selectedSongs, setSelectedSongs] = useState<AudioFile[]>([]);
+
+  const handleCreatePlaylist = () => {
+    if (!newPlaylistName.trim()) {
+      Alert.alert('Error', 'Por favor ingresa un nombre para la playlist');
+      return;
+    }
+
+    if (selectedSongs.length === 0) {
+      Alert.alert('Error', 'Selecciona al menos una canción');
+      return;
+    }
+
+    onCreatePlaylist(newPlaylistName.trim(), selectedSongs);
+    setNewPlaylistName('');
+    setSelectedSongs([]);
+    setShowCreateModal(false);
+  };
+
+  const handleDeletePlaylist = (playlist: PlaylistData) => {
+    Alert.alert(
+      'Confirmar eliminación',
+      `¿Estás seguro de que quieres eliminar la playlist "${playlist.name}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { 
+          text: 'Eliminar', 
+          style: 'destructive',
+          onPress: () => onDeletePlaylist(playlist)
+        },
+      ]
+    );
+  };
+
+  const toggleSongSelection = (song: AudioFile) => {
+    const isSelected = selectedSongs.some(s => s.id === song.id);
+    if (isSelected) {
+      setSelectedSongs(selectedSongs.filter(s => s.id !== song.id));
+    } else {
+      setSelectedSongs([...selectedSongs, song]);
+    }
+  };
+
+  const formatTime = (milliseconds: number) => {
+    const totalSeconds = Math.floor(milliseconds / 1000);
+    const minutes = Math.floor(totalSeconds / 60);
+    const seconds = totalSeconds % 60;
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const renderPlaylistItem = ({ item }: { item: PlaylistData }) => (
+    <View style={styles.playlistItem}>
+      <TouchableOpacity 
+        style={styles.playlistInfo}
+        onPress={() => onLoadPlaylist(item)}
+      >
+        <MaterialIcons name="playlist-play" size={24} color={COLORS.primary} />
+        <View style={styles.playlistDetails}>
+          <Text style={styles.playlistName}>{item.name}</Text>
+          <Text style={styles.playlistSongCount}>
+            {item.songs.length} canciones
+          </Text>
+          <Text style={styles.playlistDate}>
+            Creada: {new Date(item.createdAt).toLocaleDateString('es-ES')}
+          </Text>
+        </View>
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => handleDeletePlaylist(item)}
+      >
+        <MaterialIcons name="delete" size={20} color={COLORS.textSecondary} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderSongItem = ({ item }: { item: AudioFile }) => {
+    const isSelected = selectedSongs.some(s => s.id === item.id);
+    
+    return (
+      <TouchableOpacity
+        style={[styles.playlistSongItem, isSelected && styles.selectedPlaylistSongItem]}
+        onPress={() => toggleSongSelection(item)}
+      >
+        <MaterialIcons
+          name={isSelected ? 'check-circle' : 'music-note'}
+          size={24}
+          color={isSelected ? COLORS.primary : COLORS.textSecondary}
+        />
+        <View style={styles.playlistSongInfo}>
+          <Text style={styles.playlistSongTitle} numberOfLines={1}>
+            {item.filename.replace(/\.[^/.]+$/, "")}
+          </Text>
+          <Text style={styles.playlistSongDuration}>
+            {formatTime(item.duration * 1000)}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <SafeAreaView style={styles.playlistManagerContainer}>
+      <View style={styles.playlistHeader}>
+        <TouchableOpacity onPress={onClose}>
+          <MaterialIcons name="close" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+        <Text style={styles.playlistTitle}>Gestión de Playlists</Text>
+        <TouchableOpacity onPress={() => setShowCreateModal(true)}>
+          <MaterialIcons name="add" size={24} color={COLORS.text} />
+        </TouchableOpacity>
+      </View>
+
+      <View style={styles.currentPlaylistInfo}>
+        <Text style={styles.currentPlaylistTitle}>Playlist Actual</Text>
+        <Text style={styles.currentPlaylistCount}>
+          {currentPlaylist.length} canciones en reproducción
+        </Text>
+      </View>
+
+      <Text style={styles.sectionTitle}>Playlists Guardadas</Text>
+      
+      {playlists.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <MaterialIcons name="playlist-add" size={60} color={COLORS.textSecondary} />
+          <Text style={styles.emptyText}>No hay playlists guardadas</Text>
+          <Text style={styles.emptySubtext}>
+            Crea tu primera playlist tocando el botón +
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={playlists}
+          renderItem={renderPlaylistItem}
+          keyExtractor={(item, index) => `${item.name}-${index}`}
+          style={styles.playlistList}
+          contentContainerStyle={styles.playlistListContent}
+        />
+      )}
+
+      {/* Modal para crear playlist */}
+      <Modal
+        visible={showCreateModal}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowCreateModal(false)}
+      >
+        <SafeAreaView style={styles.playlistModalContainer}>
+          <View style={styles.playlistModalHeader}>
+            <TouchableOpacity onPress={() => {
+              setShowCreateModal(false);
+              setSelectedSongs([]);
+              setNewPlaylistName('');
+            }}>
+              <MaterialIcons name="close" size={24} color={COLORS.text} />
+            </TouchableOpacity>
+            <Text style={styles.playlistModalTitle}>Nueva Playlist</Text>
+            <TouchableOpacity 
+              onPress={handleCreatePlaylist}
+              disabled={!newPlaylistName.trim() || selectedSongs.length === 0}
+            >
+              <MaterialIcons 
+                name="check" 
+                size={24} 
+                color={(!newPlaylistName.trim() || selectedSongs.length === 0) 
+                  ? COLORS.textSecondary 
+                  : COLORS.primary
+                } 
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.nameInputContainer}>
+            <TextInput
+              style={styles.nameInput}
+              placeholder="Nombre de la playlist"
+              placeholderTextColor={COLORS.textSecondary}
+              value={newPlaylistName}
+              onChangeText={setNewPlaylistName}
+              maxLength={50}
+            />
+          </View>
+
+          <View style={styles.selectionInfo}>
+            <Text style={styles.selectionText}>
+              Seleccionadas: {selectedSongs.length} de {audioFiles.length}
+            </Text>
+            <TouchableOpacity
+              onPress={() => {
+                if (selectedSongs.length === audioFiles.length) {
+                  setSelectedSongs([]);
+                } else {
+                  setSelectedSongs([...audioFiles]);
+                }
+              }}
+            >
+              <Text style={styles.selectAllText}>
+                {selectedSongs.length === audioFiles.length ? 'Deseleccionar Todo' : 'Seleccionar Todo'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          <FlatList
+            data={audioFiles}
+            renderItem={renderSongItem}
+            keyExtractor={item => item.id}
+            style={styles.playlistSongList}
+            contentContainerStyle={styles.playlistSongListContent}
+          />
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
 export default function MusicPlayer() {
   // Estados principales
   const [audioFiles, setAudioFiles] = useState<AudioFile[]>([]);
@@ -67,7 +453,6 @@ export default function MusicPlayer() {
   const [isShuffleOn, setIsShuffleOn] = useState(false);
   const [repeatMode, setRepeatMode] = useState<'off' | 'all' | 'one'>('off');
   const [searchQuery, setSearchQuery] = useState('');
-  const [currentView, setCurrentView] = useState<'library' | 'playlist' | 'folders'>('library');
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [hasPermission, setHasPermission] = useState(false);
   const [showFolderBrowser, setShowFolderBrowser] = useState(false);
@@ -92,7 +477,7 @@ export default function MusicPlayer() {
         
         if (allGranted) {
           setHasPermission(true);
-          await loadInitialDataUpdated();
+          await loadInitialData();
         } else {
           Alert.alert('Permisos requeridos', 'Necesitamos acceso al almacenamiento para funcionar');
         }
@@ -100,7 +485,7 @@ export default function MusicPlayer() {
         const { status } = await MediaLibrary.requestPermissionsAsync();
         if (status === 'granted') {
           setHasPermission(true);
-          await loadInitialDataUpdated();
+          await loadInitialData();
         }
       }
     } catch (error) {
@@ -114,7 +499,8 @@ export default function MusicPlayer() {
       await Promise.all([
         scanMusicFiles(),
         loadPlaylists(),
-        loadSettings()
+        loadSettings(),
+        loadSelectedFolders()
       ]);
     } catch (error) {
       console.error('Error loading initial data:', error);
@@ -173,6 +559,19 @@ export default function MusicPlayer() {
       }
     } catch (error) {
       console.error('Error loading settings:', error);
+    }
+  };
+
+  // Cargar carpetas seleccionadas guardadas
+  const loadSelectedFolders = async () => {
+    try {
+      const savedFolders = await AsyncStorage.getItem('selectedFolders');
+      if (savedFolders) {
+        const folders = JSON.parse(savedFolders);
+        setSelectedFolders(folders);
+      }
+    } catch (error) {
+      console.error('Error loading selected folders:', error);
     }
   };
 
@@ -260,7 +659,6 @@ export default function MusicPlayer() {
     }
 
     if (isShuffleOn) {
-      // Evitar repetir la misma canción inmediatamente en shuffle
       do {
         nextIndex = Math.floor(Math.random() * currentPlaylist.length);
       } while (nextIndex === currentIndex && currentPlaylist.length > 1);
@@ -287,7 +685,6 @@ export default function MusicPlayer() {
   // Iniciar reproducción automática cuando se cargan las canciones
   useEffect(() => {
     if (!isLoading && currentPlaylist.length > 0 && !currentSong && hasPermission) {
-      // Delay para asegurar que el componente esté completamente montado
       const timer = setTimeout(() => {
         startRandomPlayback();
       }, 1000);
@@ -417,103 +814,9 @@ export default function MusicPlayer() {
       
       setSelectedFolders(updatedFolders);
       await AsyncStorage.setItem('selectedFolders', JSON.stringify(updatedFolders));
-      
-      // Reescanear música con las nuevas carpetas
-      await scanMusicFromFolders(updatedFolders);
     } catch (error) {
       console.error('Error selecting folder:', error);
       Alert.alert('Error', 'No se pudo procesar la carpeta');
-    }
-  };
-
-  // Escanear música desde carpetas específicas
-  const scanMusicFromFolders = async (folders: string[]) => {
-    if (folders.length === 0) return;
-
-    try {
-      setIsLoading(true);
-      const audioFormats = ['.mp3', '.m4a', '.flac', '.wav', '.aac', '.ogg'];
-      const foundFiles: AudioFile[] = [];
-
-      for (const folderPath of folders) {
-        try {
-          const items = await FileSystem.readDirectoryAsync(folderPath);
-          
-          for (const item of items) {
-            const itemPath = `${folderPath}/${item}`;
-            const itemInfo = await FileSystem.getInfoAsync(itemPath);
-            
-            if (!itemInfo.isDirectory && audioFormats.some(format => 
-              item.toLowerCase().endsWith(format)
-            )) {
-              foundFiles.push({
-                id: `folder-${Date.now()}-${Math.random()}`,
-                filename: item,
-                uri: itemPath,
-                duration: 0, // Se podría obtener metadatos aquí
-                modificationTime: itemInfo.modificationTime || Date.now(),
-              });
-            }
-          }
-        } catch (folderError) {
-          console.error(`Error scanning folder ${folderPath}:`, folderError);
-        }
-      }
-
-      // Combinar con archivos existentes de MediaLibrary y remover duplicados
-      const combinedFiles = [...audioFiles];
-      foundFiles.forEach(newFile => {
-        const exists = combinedFiles.some(existing => 
-          existing.filename === newFile.filename || existing.uri === newFile.uri
-        );
-        if (!exists) {
-          combinedFiles.push(newFile);
-        }
-      });
-
-      setAudioFiles(combinedFiles);
-      if (currentPlaylist.length === 0) {
-        setCurrentPlaylist(combinedFiles);
-      }
-
-      Alert.alert('Escaneo completo', `Se encontraron ${foundFiles.length} archivos nuevos en las carpetas seleccionadas`);
-    } catch (error) {
-      console.error('Error scanning folders:', error);
-      Alert.alert('Error', 'No se pudieron escanear las carpetas');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  // Cargar carpetas seleccionadas guardadas
-  const loadSelectedFolders = async () => {
-    try {
-      const savedFolders = await AsyncStorage.getItem('selectedFolders');
-      if (savedFolders) {
-        const folders = JSON.parse(savedFolders);
-        setSelectedFolders(folders);
-        // Escanear música de las carpetas guardadas
-        await scanMusicFromFolders(folders);
-      }
-    } catch (error) {
-      console.error('Error loading selected folders:', error);
-    }
-  };
-
-  // Actualizar loadInitialData para incluir carpetas
-  const loadInitialDataUpdated = async () => {
-    setIsLoading(true);
-    try {
-      await Promise.all([
-        scanMusicFiles(),
-        loadPlaylists(),
-        loadSettings(),
-        loadSelectedFolders()
-      ]);
-    } catch (error) {
-      console.error('Error loading initial data:', error);
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -919,5 +1222,260 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.primary,
     width: 16,
     height: 16,
+  },
+  // Estilos para FolderBrowser
+  folderBrowserContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  folderHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  folderTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  pathContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: COLORS.surface,
+  },
+  currentPath: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    fontFamily: 'monospace',
+  },
+  selectedInfo: {
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  selectedText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  folderList: {
+    flex: 1,
+  },
+  folderListContent: {
+    paddingHorizontal: 20,
+  },
+  folderItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    marginVertical: 2,
+    backgroundColor: COLORS.surface,
+    borderRadius: 8,
+    gap: 12,
+  },
+  selectedFolderItem: {
+    backgroundColor: COLORS.primary + '20',
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+  },
+  folderItemInfo: {
+    flex: 1,
+  },
+  folderItemName: {
+    color: COLORS.text,
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  folderItemSize: {
+    color: COLORS.textSecondary,
+    fontSize: 12,
+    marginTop: 2,
+  },
+  folderSelectButton: {
+    padding: 8,
+  },
+  // Estilos para PlaylistManager
+  playlistManagerContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  playlistHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  playlistTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  currentPlaylistInfo: {
+    padding: 20,
+    backgroundColor: COLORS.surface,
+    marginBottom: 16,
+  },
+  currentPlaylistTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  currentPlaylistCount: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  emptyContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '500',
+    color: COLORS.text,
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  emptySubtext: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  playlistList: {
+    flex: 1,
+  },
+  playlistListContent: {
+    paddingHorizontal: 20,
+  },
+  playlistItem: {
+    flexDirection: 'row',
+    backgroundColor: COLORS.surface,
+    borderRadius: 12,
+    marginVertical: 4,
+  },
+  playlistInfo: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    gap: 12,
+  },
+  playlistDetails: {
+    flex: 1,
+  },
+  playlistName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 4,
+  },
+  playlistSongCount: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginBottom: 2,
+  },
+  playlistDate: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+  },
+  deleteButton: {
+    padding: 16,
+    justifyContent: 'center',
+  },
+  playlistModalContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  playlistModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  playlistModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: COLORS.text,
+  },
+  nameInputContainer: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+  },
+  nameInput: {
+    backgroundColor: COLORS.surface,
+    color: COLORS.text,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    fontSize: 16,
+  },
+  selectionInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+  },
+  selectionText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
+  selectAllText: {
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  playlistSongList: {
+    flex: 1,
+  },
+  playlistSongListContent: {
+    paddingHorizontal: 20,
+  },
+  playlistSongItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.surface,
+    padding: 12,
+    marginVertical: 2,
+    borderRadius: 8,
+    gap: 12,
+  },
+  selectedPlaylistSongItem: {
+    backgroundColor: COLORS.primary + '20',
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.primary,
+  },
+  playlistSongInfo: {
+    flex: 1,
+  },
+  playlistSongTitle: {
+    color: COLORS.text,
+    fontSize: 14,
+    fontWeight: '500',
+    marginBottom: 2,
+  },
+  playlistSongDuration: {
+    color: COLORS.textSecondary,
+    fontSize: 11,
   },
 });
