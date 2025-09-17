@@ -22,6 +22,9 @@ import Slider from '@react-native-community/slider';
 import { MaterialIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
+// Verificar si estamos en plataforma nativa
+const isNative = Platform.OS !== 'web';
+
 // Colores del tema naranja oscuro
 const COLORS = {
   primary: '#CC4F00',     // Naranja oscuro principal
