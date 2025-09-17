@@ -260,7 +260,10 @@ export default function MusicPlayer() {
     }
 
     if (isShuffleOn) {
-      nextIndex = Math.floor(Math.random() * currentPlaylist.length);
+      // Evitar repetir la misma canción inmediatamente en shuffle
+      do {
+        nextIndex = Math.floor(Math.random() * currentPlaylist.length);
+      } while (nextIndex === currentIndex && currentPlaylist.length > 1);
     } else if (nextIndex >= currentPlaylist.length) {
       if (repeatMode === 'all') {
         nextIndex = 0;
@@ -272,6 +275,26 @@ export default function MusicPlayer() {
 
     playSong(currentPlaylist[nextIndex]);
   };
+
+  // Función para iniciar reproducción random automática
+  const startRandomPlayback = () => {
+    if (currentPlaylist.length > 0 && !currentSong) {
+      const randomIndex = Math.floor(Math.random() * currentPlaylist.length);
+      playSong(currentPlaylist[randomIndex]);
+    }
+  };
+
+  // Iniciar reproducción automática cuando se cargan las canciones
+  useEffect(() => {
+    if (!isLoading && currentPlaylist.length > 0 && !currentSong && hasPermission) {
+      // Delay para asegurar que el componente esté completamente montado
+      const timer = setTimeout(() => {
+        startRandomPlayback();
+      }, 1000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [currentPlaylist, isLoading, hasPermission]);
 
   // Reproducir canción anterior
   const playPreviousSong = () => {
