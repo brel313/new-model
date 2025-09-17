@@ -487,10 +487,48 @@ export default function MusicPlayer() {
 
   // Solicitar permisos al iniciar
   useEffect(() => {
-    requestPermissions();
+    if (isNative) {
+      requestPermissions();
+    } else {
+      // En web, simular permisos concedidos pero con funcionalidad limitada
+      setHasPermission(true);
+      loadWebMockData();
+    }
   }, []);
 
+  const loadWebMockData = () => {
+    // Datos de demostración para web
+    const mockSongs: AudioFile[] = [
+      {
+        id: 'demo-1',
+        filename: 'Canción Demo 1.mp3',
+        uri: 'demo://song1',
+        duration: 180,
+        modificationTime: Date.now(),
+      },
+      {
+        id: 'demo-2', 
+        filename: 'Canción Demo 2.mp3',
+        uri: 'demo://song2',
+        duration: 210,
+        modificationTime: Date.now(),
+      },
+      {
+        id: 'demo-3',
+        filename: 'Música de Ejemplo.mp3',
+        uri: 'demo://song3',
+        duration: 195,
+        modificationTime: Date.now(),
+      }
+    ];
+    
+    setAudioFiles(mockSongs);
+    setCurrentPlaylist(mockSongs);
+  };
+
   const requestPermissions = async () => {
+    if (!isNative) return;
+    
     try {
       if (Platform.OS === 'android') {
         const granted = await PermissionsAndroid.requestMultiple([
@@ -521,6 +559,8 @@ export default function MusicPlayer() {
   };
 
   const loadInitialData = async () => {
+    if (!isNative) return;
+    
     setIsLoading(true);
     try {
       await Promise.all([
@@ -538,6 +578,8 @@ export default function MusicPlayer() {
 
   // Escanear archivos de música
   const scanMusicFiles = async () => {
+    if (!isNative) return;
+    
     try {
       const assets = await MediaLibrary.getAssetsAsync({
         mediaType: 'audio',
