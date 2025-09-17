@@ -340,6 +340,160 @@ export default function MusicPlayer() {
     saveSettings();
   };
 
+  // Funciones para gestión de playlists
+  const handleCreatePlaylist = async (name: string, songs: AudioFile[]) => {
+    try {
+      const newPlaylist: PlaylistData = {
+        name,
+        songs,
+        createdAt: new Date().toISOString(),
+      };
+
+      const updatedPlaylists = [...playlists, newPlaylist];
+      setPlaylists(updatedPlaylists);
+      await AsyncStorage.setItem('playlists', JSON.stringify(updatedPlaylists));
+      
+      Alert.alert('Éxito', `Playlist "${name}" creada con ${songs.length} canciones`);
+    } catch (error) {
+      console.error('Error creating playlist:', error);
+      Alert.alert('Error', 'No se pudo crear la playlist');
+    }
+  };
+
+  const handleLoadPlaylist = (playlist: PlaylistData) => {
+    setCurrentPlaylist(playlist.songs);
+    Alert.alert('Playlist Cargada', `Se cargaron ${playlist.songs.length} canciones de "${playlist.name}"`);
+  };
+
+  const handleDeletePlaylist = async (playlist: PlaylistData) => {
+    try {
+      const updatedPlaylists = playlists.filter(p => p.name !== playlist.name || p.createdAt !== playlist.createdAt);
+      setPlaylists(updatedPlaylists);
+      await AsyncStorage.setItem('playlists', JSON.stringify(updatedPlaylists));
+      
+      Alert.alert('Eliminada', `La playlist "${playlist.name}" ha sido eliminada`);
+    } catch (error) {
+      console.error('Error deleting playlist:', error);
+      Alert.alert('Error', 'No se pudo eliminar la playlist');
+    }
+  };
+
+  // Función para seleccionar carpetas
+  const handleFolderSelect = async (folderPath: string) => {
+    try {
+      const isAlreadySelected = selectedFolders.includes(folderPath);
+      let updatedFolders;
+      
+      if (isAlreadySelected) {
+        updatedFolders = selectedFolders.filter(path => path !== folderPath);
+        Alert.alert('Carpeta removida', `Se removió la carpeta del escaneo`);
+      } else {
+        updatedFolders = [...selectedFolders, folderPath];
+        Alert.alert('Carpeta agregada', `Se agregó la carpeta al escaneo`);
+      }
+      
+      setSelectedFolders(updatedFolders);
+      await AsyncStorage.setItem('selectedFolders', JSON.stringify(updatedFolders));
+      
+      // Reescanear música con las nuevas carpetas
+      await scanMusicFromFolders(updatedFolders);
+    } catch (error) {
+      console.error('Error selecting folder:', error);
+      Alert.alert('Error', 'No se pudo procesar la carpeta');
+    }
+  };
+
+  // Escanear música desde carpetas específicas
+  const scanMusicFromFolders = async (folders: string[]) => {
+    if (folders.length === 0) return;
+
+    try {
+      setIsLoading(true);
+      const audioFormats = ['.mp3', '.m4a', '.flac', '.wav', '.aac', '.ogg'];
+      const foundFiles: AudioFile[] = [];
+
+      for (const folderPath of folders) {
+        try {
+          const items = await FileSystem.readDirectoryAsync(folderPath);
+          
+          for (const item of items) {
+            const itemPath = `${folderPath}/${item}`;
+            const itemInfo = await FileSystem.getInfoAsync(itemPath);
+            
+            if (!itemInfo.isDirectory && audioFormats.some(format => 
+              item.toLowerCase().endsWith(format)
+            )) {
+              foundFiles.push({
+                id: `folder-${Date.now()}-${Math.random()}`,
+                filename: item,
+                uri: itemPath,
+                duration: 0, // Se podría obtener metadatos aquí
+                modificationTime: itemInfo.modificationTime || Date.now(),
+              });
+            }
+          }
+        } catch (folderError) {
+          console.error(`Error scanning folder ${folderPath}:`, folderError);
+        }
+      }
+
+      // Combinar con archivos existentes de MediaLibrary y remover duplicados
+      const combinedFiles = [...audioFiles];
+      foundFiles.forEach(newFile => {
+        const exists = combinedFiles.some(existing => 
+          existing.filename === newFile.filename || existing.uri === newFile.uri
+        );
+        if (!exists) {
+          combinedFiles.push(newFile);
+        }
+      });
+
+      setAudioFiles(combinedFiles);
+      if (currentPlaylist.length === 0) {
+        setCurrentPlaylist(combinedFiles);
+      }
+
+      Alert.alert('Escaneo completo', `Se encontraron ${foundFiles.length} archivos nuevos en las carpetas seleccionadas`);
+    } catch (error) {
+      console.error('Error scanning folders:', error);
+      Alert.alert('Error', 'No se pudieron escanear las carpetas');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Cargar carpetas seleccionadas guardadas
+  const loadSelectedFolders = async () => {
+    try {
+      const savedFolders = await AsyncStorage.getItem('selectedFolders');
+      if (savedFolders) {
+        const folders = JSON.parse(savedFolders);
+        setSelectedFolders(folders);
+        // Escanear música de las carpetas guardadas
+        await scanMusicFromFolders(folders);
+      }
+    } catch (error) {
+      console.error('Error loading selected folders:', error);
+    }
+  };
+
+  // Actualizar loadInitialData para incluir carpetas
+  const loadInitialDataUpdated = async () => {
+    setIsLoading(true);
+    try {
+      await Promise.all([
+        scanMusicFiles(),
+        loadPlaylists(),
+        loadSettings(),
+        loadSelectedFolders()
+      ]);
+    } catch (error) {
+      console.error('Error loading initial data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   // Filtrar canciones por búsqueda
   const filteredSongs = audioFiles.filter(song =>
     song.filename.toLowerCase().includes(searchQuery.toLowerCase())
