@@ -92,7 +92,7 @@ export default function MusicPlayer() {
         
         if (allGranted) {
           setHasPermission(true);
-          await loadInitialData();
+          await loadInitialDataUpdated();
         } else {
           Alert.alert('Permisos requeridos', 'Necesitamos acceso al almacenamiento para funcionar');
         }
