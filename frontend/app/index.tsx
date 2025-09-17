@@ -70,6 +70,8 @@ export default function MusicPlayer() {
   const [currentView, setCurrentView] = useState<'library' | 'playlist' | 'folders'>('library');
   const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
   const [hasPermission, setHasPermission] = useState(false);
+  const [showFolderBrowser, setShowFolderBrowser] = useState(false);
+  const [showPlaylistManager, setShowPlaylistManager] = useState(false);
 
   // Solicitar permisos al iniciar
   useEffect(() => {
