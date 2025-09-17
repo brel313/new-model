@@ -59,15 +59,25 @@ function FolderBrowser({ onFolderSelect, onClose, selectedFolders }: {
   onClose: () => void;
   selectedFolders: string[];
 }) {
-  const [currentPath, setCurrentPath] = useState(FileSystem.documentDirectory || '');
+  const [currentPath, setCurrentPath] = useState(isNative ? (FileSystem.documentDirectory || '') : '/');
   const [items, setItems] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadDirectory(currentPath);
+    if (isNative) {
+      loadDirectory(currentPath);
+    } else {
+      // Para web, mostrar mensaje de no disponible
+      setItems([]);
+    }
   }, [currentPath]);
 
   const loadDirectory = async (path: string) => {
+    if (!isNative) {
+      Alert.alert('No disponible', 'El explorador de archivos solo está disponible en dispositivos móviles');
+      return;
+    }
+    
     setLoading(true);
     try {
       const info = await FileSystem.getInfoAsync(path);
@@ -107,6 +117,7 @@ function FolderBrowser({ onFolderSelect, onClose, selectedFolders }: {
   };
 
   const navigateToParent = () => {
+    if (!isNative) return;
     const parentPath = currentPath.split('/').slice(0, -1).join('/');
     if (parentPath) {
       setCurrentPath(parentPath);
@@ -183,25 +194,38 @@ function FolderBrowser({ onFolderSelect, onClose, selectedFolders }: {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.pathContainer}>
-        <Text style={styles.currentPath} numberOfLines={1}>
-          {currentPath}
-        </Text>
-      </View>
+      {!isNative ? (
+        <View style={styles.webNotAvailable}>
+          <MaterialIcons name="folder-off" size={60} color={COLORS.textSecondary} />
+          <Text style={styles.webNotAvailableTitle}>No disponible en web</Text>
+          <Text style={styles.webNotAvailableText}>
+            El explorador de archivos solo está disponible en dispositivos móviles.
+            Para probar esta funcionalidad, instala la app en tu teléfono.
+          </Text>
+        </View>
+      ) : (
+        <View style={{ flex: 1 }}>
+          <View style={styles.pathContainer}>
+            <Text style={styles.currentPath} numberOfLines={1}>
+              {currentPath}
+            </Text>
+          </View>
 
-      <View style={styles.selectedInfo}>
-        <Text style={styles.selectedText}>
-          Carpetas seleccionadas: {selectedFolders.length}
-        </Text>
-      </View>
+          <View style={styles.selectedInfo}>
+            <Text style={styles.selectedText}>
+              Carpetas seleccionadas: {selectedFolders.length}
+            </Text>
+          </View>
 
-      <FlatList
-        data={items}
-        renderItem={renderItem}
-        keyExtractor={item => item.uri}
-        style={styles.folderList}
-        contentContainerStyle={styles.folderListContent}
-      />
+          <FlatList
+            data={items}
+            renderItem={renderItem}
+            keyExtractor={item => item.uri}
+            style={styles.folderList}
+            contentContainerStyle={styles.folderListContent}
+          />
+        </View>
+      )}
     </SafeAreaView>
   );
 }
