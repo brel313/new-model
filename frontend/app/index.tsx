@@ -660,13 +660,15 @@ export default function MusicPlayer() {
 
   // Configurar audio
   useEffect(() => {
-    Audio.setAudioModeAsync({
-      allowsRecordingIOS: false,
-      staysActiveInBackground: true,
-      playsInSilentModeIOS: true,
-      shouldDuckAndroid: true,
-      playThroughEarpieceAndroid: false,
-    });
+    if (isNative) {
+      Audio.setAudioModeAsync({
+        allowsRecordingIOS: false,
+        staysActiveInBackground: true,
+        playsInSilentModeIOS: true,
+        shouldDuckAndroid: true,
+        playThroughEarpieceAndroid: false,
+      });
+    }
 
     return () => {
       if (sound) {
@@ -677,6 +679,13 @@ export default function MusicPlayer() {
 
   // Reproducir canción
   const playSong = async (song: AudioFile) => {
+    if (!isNative) {
+      Alert.alert('Demo Mode', `En dispositivos móviles reproduciría: ${song.filename.replace(/\.[^/.]+$/, "")}`);
+      setCurrentSong(song);
+      setIsPlaying(true);
+      return;
+    }
+    
     try {
       setIsLoading(true);
       
