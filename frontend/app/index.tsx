@@ -12,6 +12,7 @@ import {
   SafeAreaView,
   ActivityIndicator,
   Dimensions,
+  Modal,
 } from 'react-native';
 import { Audio, AVPlaybackStatus } from 'expo-av';
 import * as MediaLibrary from 'expo-media-library';
@@ -20,6 +21,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Slider from 'react-native-slider';
 import { MaterialIcons, Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import FolderBrowser from '../components/FolderBrowser';
+import PlaylistManager from '../components/PlaylistManager';
 
 // Colores del tema naranja oscuro
 const COLORS = {
