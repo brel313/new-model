@@ -1376,6 +1376,27 @@ const styles = StyleSheet.create({
   folderSelectButton: {
     padding: 8,
   },
+  // Estilos para mensaje de web no disponible
+  webNotAvailable: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingVertical: 60,
+  },
+  webNotAvailableTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: COLORS.text,
+    marginTop: 20,
+    marginBottom: 12,
+  },
+  webNotAvailableText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
   // Estilos para PlaylistManager
   playlistManagerContainer: {
     flex: 1,
