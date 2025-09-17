@@ -691,6 +691,37 @@ export default function MusicPlayer() {
           </View>
         </View>
       )}
+
+      {/* Modales */}
+      <Modal
+        visible={showFolderBrowser}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowFolderBrowser(false)}
+      >
+        <FolderBrowser
+          onFolderSelect={handleFolderSelect}
+          onClose={() => setShowFolderBrowser(false)}
+          selectedFolders={selectedFolders}
+        />
+      </Modal>
+
+      <Modal
+        visible={showPlaylistManager}
+        animationType="slide"
+        transparent={false}
+        onRequestClose={() => setShowPlaylistManager(false)}
+      >
+        <PlaylistManager
+          playlists={playlists}
+          currentPlaylist={currentPlaylist}
+          onCreatePlaylist={handleCreatePlaylist}
+          onLoadPlaylist={handleLoadPlaylist}
+          onDeletePlaylist={handleDeletePlaylist}
+          onClose={() => setShowPlaylistManager(false)}
+          audioFiles={audioFiles}
+        />
+      </Modal>
     </SafeAreaView>
   );
 }
