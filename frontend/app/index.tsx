@@ -18,7 +18,7 @@ import { Audio, AVPlaybackStatus } from 'expo-av';
 import * as MediaLibrary from 'expo-media-library';
 import * as FileSystem from 'expo-file-system';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import Slider from 'react-native-slider';
+import Slider from '@react-native-community/slider';
 import { MaterialIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
