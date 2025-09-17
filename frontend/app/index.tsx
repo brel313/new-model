@@ -565,10 +565,10 @@ export default function MusicPlayer() {
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Reproductor de Música</Text>
         <View style={styles.headerControls}>
-          <TouchableOpacity onPress={() => setCurrentView('folders')}>
+          <TouchableOpacity onPress={() => setShowFolderBrowser(true)}>
             <MaterialIcons name="folder" size={28} color={COLORS.text} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={() => setCurrentView('playlist')}>
+          <TouchableOpacity onPress={() => setShowPlaylistManager(true)}>
             <MaterialIcons name="playlist-play" size={28} color={COLORS.text} />
           </TouchableOpacity>
         </View>
